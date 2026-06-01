@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#4a90c4">
-    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="Ausências">
     <title>Controle de Ausências</title>
     <style>
@@ -323,7 +322,7 @@
 <div class="container">
     <h1>Controle de Ausências</h1>
 
-    <div id="statusConexao" class="status-conexao">Conectando ao banco de dados...</div>
+    <div id="statusConexao" class="status-conexao">Iniciando...</div>
 
     <div class="barra-ferramentas">
         <label>Ano:</label>
@@ -369,6 +368,7 @@
 </div>
 
 <script>
+    // Usando a chave anon key (não a service_role no front-end)
     const SUPABASE_URL = 'https://jpmwryzvgsxbdjdmuoou.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwbXdyeXp2Z3N4YmRqZG11b291Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMTM4MDksImV4cCI6MjA5NTg4OTgwOX0.E7yO8lZTqskg21ctXtiQW5oYnt1CKD89J4MKwzHhDaQ';
 
@@ -387,34 +387,44 @@
         } else {
             statusDiv.className = 'status-conexao';
         }
+        setTimeout(() => {
+            if (statusDiv.className !== 'status-conexao erro') {
+                statusDiv.className = 'status-conexao';
+                statusDiv.textContent = 'Conectado';
+            }
+        }, 2000);
     }
 
     async function initSupabase() {
         try {
+            mostrarStatus('Conectando ao banco...', 'sincronizando');
             const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
             supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             await carregarDados();
         } catch (error) {
-            console.error('Erro ao inicializar Supabase:', error);
-            mostrarStatus('Erro de conexão com o banco', 'erro');
+            console.error('Erro:', error);
+            mostrarStatus('Erro de conexão', 'erro');
             carregarDadosLocal();
         }
     }
 
     async function carregarDados() {
         try {
-            mostrarStatus('Carregando colaboradores...', 'sincronizando');
-            
+            // Carregar colaboradores
             const { data: colabsData, error: colabsError } = await supabaseClient
                 .from('colaboradores')
                 .select('*')
                 .order('id');
             
-            if (colabsError) throw colabsError;
+            if (colabsError) {
+                console.error('Erro colaboradores:', colabsError);
+                throw colabsError;
+            }
             
             if (colabsData && colabsData.length > 0) {
                 colaboradores = colabsData;
             } else {
+                // Inserir dados padrão
                 colaboradores = [
                     { id: 1, nome: "Anna Flávia", cor: "colab-rosa" },
                     { id: 2, nome: "Daniela", cor: "colab-verde" },
@@ -429,13 +439,15 @@
                 }
             }
             
-            mostrarStatus('Carregando ocorrências...', 'sincronizando');
-            
+            // Carregar ocorrências
             const { data: ocorrData, error: ocorrError } = await supabaseClient
                 .from('ocorrencias')
                 .select('*');
             
-            if (ocorrError) throw ocorrError;
+            if (ocorrError) {
+                console.error('Erro ocorrências:', ocorrError);
+                throw ocorrError;
+            }
             
             ocorrencias = (ocorrData || []).map(occ => ({
                 id: occ.id,
@@ -446,18 +458,18 @@
             
             salvarDadosLocal();
             renderizarTudo();
-            mostrarStatus('Conectado ao banco de dados');
+            mostrarStatus('Dados carregados!');
             
         } catch (error) {
-            console.error('Erro:', error);
+            console.error('Erro ao carregar:', error);
             mostrarStatus('Erro: ' + error.message, 'erro');
             carregarDadosLocal();
         }
     }
 
     function carregarDadosLocal() {
-        const storedColabs = localStorage.getItem("colaboradores_pwa");
-        const storedOcorr = localStorage.getItem("ocorrencias_pwa");
+        const storedColabs = localStorage.getItem("colaboradores_local");
+        const storedOcorr = localStorage.getItem("ocorrencias_local");
         
         if (storedColabs) {
             colaboradores = JSON.parse(storedColabs);
@@ -479,12 +491,11 @@
         }
         
         renderizarTudo();
-        mostrarStatus('Modo offline - dados locais');
     }
 
     function salvarDadosLocal() {
-        localStorage.setItem("colaboradores_pwa", JSON.stringify(colaboradores));
-        localStorage.setItem("ocorrencias_pwa", JSON.stringify(ocorrencias));
+        localStorage.setItem("colaboradores_local", JSON.stringify(colaboradores));
+        localStorage.setItem("ocorrencias_local", JSON.stringify(ocorrencias));
     }
 
     async function adicionarOcorrencia(data, colaboradorId, motivo) {
@@ -517,8 +528,8 @@
             
         } catch (error) {
             console.error('Erro:', error);
-            mostrarStatus('Erro ao salvar: ' + error.message, 'erro');
-            // Fallback: salvar apenas localmente
+            mostrarStatus('Erro: ' + error.message, 'erro');
+            // Salvar localmente mesmo com erro
             ocorrencias.push({
                 id: novaOcorrencia.id,
                 data: novaOcorrencia.data,
@@ -544,82 +555,13 @@
             ocorrencias = ocorrencias.filter(occ => occ.id !== id);
             salvarDadosLocal();
             renderizarTudo();
-            mostrarStatus('Excluído com sucesso!');
+            mostrarStatus('Excluído!');
             
         } catch (error) {
             console.error('Erro:', error);
-            mostrarStatus('Erro ao excluir: ' + error.message, 'erro');
-            // Fallback: excluir apenas localmente
+            mostrarStatus('Erro ao excluir', 'erro');
+            // Excluir localmente mesmo com erro
             ocorrencias = ocorrencias.filter(occ => occ.id !== id);
-            salvarDadosLocal();
-            renderizarTudo();
-        }
-    }
-
-    async function adicionarColaborador(nome) {
-        const coresExtras = ["colab-cinza", "colab-marrom", "colab-azul-claro"];
-        const novaCor = coresExtras[(colaboradores.length - 6) % coresExtras.length];
-        const novoId = colaboradores.length > 0 ? Math.max(...colaboradores.map(c => c.id)) + 1 : 7;
-        const novoColab = { id: novoId, nome, cor: novaCor };
-        
-        mostrarStatus('Salvando colaborador...', 'sincronizando');
-        
-        try {
-            const { error } = await supabaseClient
-                .from('colaboradores')
-                .insert([novoColab]);
-            
-            if (error) throw error;
-            
-            colaboradores.push(novoColab);
-            salvarDadosLocal();
-            renderizarTudo();
-            mostrarStatus('Colaborador salvo!');
-            
-        } catch (error) {
-            console.error('Erro:', error);
-            mostrarStatus('Erro ao salvar colaborador: ' + error.message, 'erro');
-            // Fallback: salvar apenas localmente
-            colaboradores.push(novoColab);
-            salvarDadosLocal();
-            renderizarTudo();
-        }
-    }
-
-    async function excluirColaborador(id) {
-        if (colaboradores.length <= 1) {
-            alert("Não é possível excluir o único colaborador.");
-            return;
-        }
-        
-        const temOcorrencias = ocorrencias.some(occ => occ.colaboradorId === id);
-        if (temOcorrencias) {
-            alert("Este colaborador possui ausências. Exclua as ausências primeiro.");
-            return;
-        }
-        
-        if (!confirm("Excluir colaborador?")) return;
-        
-        mostrarStatus('Excluindo colaborador...', 'sincronizando');
-        
-        try {
-            const { error } = await supabaseClient
-                .from('colaboradores')
-                .delete()
-                .eq('id', id);
-            
-            if (error) throw error;
-            
-            colaboradores = colaboradores.filter(c => c.id !== id);
-            salvarDadosLocal();
-            renderizarTudo();
-            mostrarStatus('Colaborador excluído!');
-            
-        } catch (error) {
-            console.error('Erro:', error);
-            mostrarStatus('Erro ao excluir colaborador: ' + error.message, 'erro');
-            // Fallback: excluir apenas localmente
-            colaboradores = colaboradores.filter(c => c.id !== id);
             salvarDadosLocal();
             renderizarTudo();
         }
@@ -687,7 +629,7 @@
                 return;
             }
             if (modalDados.id) {
-                alert("Edição não disponível no momento. Exclua e crie uma nova.");
+                alert("Edição não disponível. Exclua e crie uma nova.");
             } else {
                 adicionarOcorrencia(data, colaboradorId, motivo);
             }
@@ -709,44 +651,7 @@
     }
 
     function abrirModalColaborador(colab = null) {
-        const modalDados = colab ? { ...colab } : { id: null, nome: "" };
-        document.getElementById("modalTitulo").innerText = colab ? "Editar Colaborador" : "Novo Colaborador";
-        document.getElementById("modalCorpo").innerHTML = `
-            <div class="form-group">
-                <label>Nome</label>
-                <input type="text" id="modalNome" value="${modalDados.nome || ''}" placeholder="Nome do colaborador" required>
-            </div>
-        `;
-        
-        const modalSalvar = document.getElementById("modalSalvar");
-        const modalCancelar = document.getElementById("modalCancelar");
-        
-        const salvarHandler = () => {
-            const nome = document.getElementById("modalNome").value.trim();
-            if (!nome) {
-                alert("Informe o nome.");
-                return;
-            }
-            if (modalDados.id) {
-                alert("Edição não disponível. Exclua e crie um novo.");
-            } else {
-                adicionarColaborador(nome);
-            }
-            fecharModal();
-            modalSalvar.removeEventListener("click", salvarHandler);
-            modalCancelar.removeEventListener("click", cancelarHandler);
-        };
-        
-        const cancelarHandler = () => {
-            fecharModal();
-            modalSalvar.removeEventListener("click", salvarHandler);
-            modalCancelar.removeEventListener("click", cancelarHandler);
-        };
-        
-        modalSalvar.addEventListener("click", salvarHandler);
-        modalCancelar.addEventListener("click", cancelarHandler);
-        
-        document.getElementById("modal").style.display = "flex";
+        alert("Para adicionar colaborador, use o SQL no Supabase.");
     }
 
     function fecharModal() {
@@ -845,8 +750,8 @@
                     <span>${colab.nome}</span>
                 </div>
                 <div>
-                    <button class="secundario" onclick="editarColab(${colab.id})" style="margin-right: 5px;">Editar</button>
-                    <button class="perigo" onclick="excluirColab(${colab.id})">Excluir</button>
+                    <button class="secundario" style="opacity:0.5;" disabled>Editar</button>
+                    <button class="perigo" style="opacity:0.5;" disabled>Excluir</button>
                 </div>
             `;
             container.appendChild(div);
@@ -893,15 +798,6 @@
         });
     }
 
-    window.editarColab = (id) => {
-        const colab = colaboradores.find(c => c.id === id);
-        if (colab) abrirModalColaborador(colab);
-    };
-
-    window.excluirColab = (id) => {
-        excluirColaborador(id);
-    };
-
     function atualizarAno() {
         anoAtual = parseInt(document.getElementById("selecionarAno").value);
         renderizarAgenda();
@@ -915,7 +811,7 @@
 
     document.getElementById("selecionarAno").addEventListener("change", atualizarAno);
     document.getElementById("novoColaboradorBtn").addEventListener("click", () => {
-        abrirModalColaborador(null);
+        alert("Para adicionar colaborador, use o SQL no Supabase:\nINSERT INTO colaboradores (id, nome, cor) VALUES (7, 'Nome', 'colab-cinza');");
     });
 
     window.addEventListener("click", (e) => {
