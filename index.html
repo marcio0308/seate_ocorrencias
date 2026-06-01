@@ -4,11 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#4a90c4">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="Ausências">
     <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="icon-192.png">
     <title>Controle de Ausências</title>
     <style>
         * {
@@ -87,6 +85,12 @@
 
         button.perigo {
             background: #c44a4a;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
         }
 
         .grid-meses {
@@ -297,6 +301,20 @@
             text-align: center;
         }
 
+        .status-conexao {
+            background: #4a90c4;
+            color: white;
+            padding: 8px;
+            text-align: center;
+            font-size: 12px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+
+        .status-conexao.offline {
+            background: #c44a4a;
+        }
+
         @media (max-width: 480px) {
             body {
                 padding: 8px;
@@ -326,6 +344,8 @@
 <div class="container">
     <h1>Controle de Ausências</h1>
 
+    <div id="statusConexao" class="status-conexao">Conectando ao servidor...</div>
+
     <div class="barra-ferramentas">
         <label>Ano:</label>
         <select id="selecionarAno">
@@ -337,17 +357,23 @@
         </select>
     </div>
 
-    <div id="agendaMensal" class="grid-meses"></div>
+    <div id="agendaMensal" class="grid-meses">
+        <div class="loading">Carregando agenda...</div>
+    </div>
 
     <div class="painel-lateral">
         <div class="lista">
             <h3>Colaboradores</h3>
-            <div id="listaColaboradores"></div>
+            <div id="listaColaboradores">
+                <div class="loading">Carregando colaboradores...</div>
+            </div>
             <button id="novoColaboradorBtn" style="margin-top: 12px; width: 100%;">Novo Colaborador</button>
         </div>
         <div class="lista">
             <h3>Solicitações por Colaborador</h3>
-            <div id="resumoContagens"></div>
+            <div id="resumoContagens">
+                <div class="loading">Carregando contagens...</div>
+            </div>
         </div>
     </div>
 
@@ -367,27 +393,86 @@
     </div>
 </div>
 
-<script>
-    let colaboradores = [
-        { id: 1, nome: "Anna Flávia", cor: "colab-rosa" },
-        { id: 2, nome: "Daniela", cor: "colab-verde" },
-        { id: 3, nome: "Denise", cor: "colab-laranja" },
-        { id: 4, nome: "Isabelle", cor: "colab-roxo" },
-        { id: 5, nome: "Ivone", cor: "colab-vermelho" },
-        { id: 6, nome: "Paulo", cor: "colab-azul" }
-    ];
+<script type="module">
+    // Configuração do Supabase
+    const SUPABASE_URL = 'https://jpmwryzvgsxbdjdmuoou.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwbXdyeXp2Z3N4YmRqZG11b291Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMTM4MDksImV4cCI6MjA5NTg4OTgwOX0.E7yO8lZTqskg21ctXtiQW5oYnt1CKD89J4MKwzHhDaQ';
 
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+    
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    let colaboradores = [];
     let ocorrencias = [];
     let anoAtual = 2026;
+    let isOnline = navigator.onLine;
 
-    const coresExtras = ["colab-cinza", "colab-marrom", "colab-azul-claro"];
+    function atualizarStatusConexao() {
+        const statusDiv = document.getElementById('statusConexao');
+        if (isOnline) {
+            statusDiv.textContent = 'Conectado ao servidor';
+            statusDiv.className = 'status-conexao';
+        } else {
+            statusDiv.textContent = 'Modo offline - Dados locais';
+            statusDiv.className = 'status-conexao offline';
+        }
+    }
 
-    function carregarDados() {
+    window.addEventListener('online', () => {
+        isOnline = true;
+        atualizarStatusConexao();
+        carregarDadosDoBanco();
+    });
+
+    window.addEventListener('offline', () => {
+        isOnline = false;
+        atualizarStatusConexao();
+    });
+
+    async function carregarDadosDoBanco() {
+        if (!isOnline) {
+            carregarDadosLocal();
+            return;
+        }
+
+        try {
+            const [colabsRes, ocorrRes] = await Promise.all([
+                supabase.from('colaboradores').select('*').order('id'),
+                supabase.from('ocorrencias').select('*')
+            ]);
+
+            if (colabsRes.error) throw colabsRes.error;
+            if (ocorrRes.error) throw ocorrRes.error;
+
+            if (colabsRes.data && colabsRes.data.length > 0) {
+                colaboradores = colabsRes.data;
+            } else {
+                colaboradores = [
+                    { id: 1, nome: "Anna Flávia", cor: "colab-rosa" },
+                    { id: 2, nome: "Daniela", cor: "colab-verde" },
+                    { id: 3, nome: "Denise", cor: "colab-laranja" },
+                    { id: 4, nome: "Isabelle", cor: "colab-roxo" },
+                    { id: 5, nome: "Ivone", cor: "colab-vermelho" },
+                    { id: 6, nome: "Paulo", cor: "colab-azul" }
+                ];
+            }
+            
+            ocorrencias = ocorrRes.data || [];
+            salvarDadosLocal();
+            renderizarTudo();
+        } catch (error) {
+            console.error('Erro ao carregar dados:', error);
+            carregarDadosLocal();
+        }
+    }
+
+    function carregarDadosLocal() {
         const storedColabs = localStorage.getItem("colaboradores_pwa");
         const storedOcorr = localStorage.getItem("ocorrencias_pwa");
-        if (storedColabs) colaboradores = JSON.parse(storedColabs);
-        if (storedOcorr) ocorrencias = JSON.parse(storedOcorr);
-        if (colaboradores.length === 0) {
+        
+        if (storedColabs) {
+            colaboradores = JSON.parse(storedColabs);
+        } else {
             colaboradores = [
                 { id: 1, nome: "Anna Flávia", cor: "colab-rosa" },
                 { id: 2, nome: "Daniela", cor: "colab-verde" },
@@ -397,12 +482,159 @@
                 { id: 6, nome: "Paulo", cor: "colab-azul" }
             ];
         }
-        salvarDados();
+        
+        if (storedOcorr) {
+            ocorrencias = JSON.parse(storedOcorr);
+        } else {
+            ocorrencias = [];
+        }
+        
+        renderizarTudo();
     }
 
-    function salvarDados() {
+    function salvarDadosLocal() {
         localStorage.setItem("colaboradores_pwa", JSON.stringify(colaboradores));
         localStorage.setItem("ocorrencias_pwa", JSON.stringify(ocorrencias));
+    }
+
+    async function sincronizarComBanco() {
+        if (!isOnline) return;
+        
+        try {
+            for (const colab of colaboradores) {
+                const { error } = await supabase
+                    .from('colaboradores')
+                    .upsert(colab, { onConflict: 'id' });
+                if (error) console.error('Erro ao sincronizar colaborador:', error);
+            }
+            
+            for (const occ of ocorrencias) {
+                const { error } = await supabase
+                    .from('ocorrencias')
+                    .upsert(occ, { onConflict: 'id' });
+                if (error) console.error('Erro ao sincronizar ocorrência:', error);
+            }
+        } catch (error) {
+            console.error('Erro na sincronização:', error);
+        }
+    }
+
+    async function adicionarOcorrencia(data, colaboradorId, motivo) {
+        const novaOcorrencia = { id: Date.now(), data, colaboradorId, motivo };
+        ocorrencias.push(novaOcorrencia);
+        salvarDadosLocal();
+        
+        if (isOnline) {
+            try {
+                await supabase.from('ocorrencias').insert([novaOcorrencia]);
+            } catch (error) {
+                console.error('Erro ao salvar no banco:', error);
+            }
+        }
+        
+        renderizarTudo();
+    }
+
+    async function editarOcorrencia(id, novaData, novoColaboradorId, novoMotivo) {
+        const index = ocorrencias.findIndex(occ => occ.id === id);
+        if (index !== -1) {
+            ocorrencias[index] = { ...ocorrencias[index], data: novaData, colaboradorId: novoColaboradorId, motivo: novoMotivo };
+            salvarDadosLocal();
+            
+            if (isOnline) {
+                try {
+                    await supabase
+                        .from('ocorrencias')
+                        .update({ data: novaData, colaboradorId: novoColaboradorId, motivo: novoMotivo })
+                        .eq('id', id);
+                } catch (error) {
+                    console.error('Erro ao editar no banco:', error);
+                }
+            }
+            
+            renderizarTudo();
+        }
+    }
+
+    async function excluirOcorrencia(id) {
+        ocorrencias = ocorrencias.filter(occ => occ.id !== id);
+        salvarDadosLocal();
+        
+        if (isOnline) {
+            try {
+                await supabase.from('ocorrencias').delete().eq('id', id);
+            } catch (error) {
+                console.error('Erro ao excluir do banco:', error);
+            }
+        }
+        
+        renderizarTudo();
+    }
+
+    async function adicionarColaborador(nome) {
+        const coresExtras = ["colab-cinza", "colab-marrom", "colab-azul-claro"];
+        const novaCor = coresExtras[(colaboradores.length - 6) % coresExtras.length];
+        const novoId = colaboradores.length > 0 ? Math.max(...colaboradores.map(c => c.id)) + 1 : 7;
+        const novoColab = { id: novoId, nome, cor: novaCor };
+        
+        colaboradores.push(novoColab);
+        salvarDadosLocal();
+        
+        if (isOnline) {
+            try {
+                await supabase.from('colaboradores').insert([novoColab]);
+            } catch (error) {
+                console.error('Erro ao salvar colaborador:', error);
+            }
+        }
+        
+        renderizarTudo();
+    }
+
+    async function editarColaborador(id, novoNome) {
+        const colab = colaboradores.find(c => c.id === id);
+        if (colab) {
+            colab.nome = novoNome;
+            salvarDadosLocal();
+            
+            if (isOnline) {
+                try {
+                    await supabase.from('colaboradores').update({ nome: novoNome }).eq('id', id);
+                } catch (error) {
+                    console.error('Erro ao editar colaborador:', error);
+                }
+            }
+            
+            renderizarTudo();
+        }
+    }
+
+    async function excluirColaborador(id) {
+        if (colaboradores.length <= 1) {
+            alert("Não é possível excluir o único colaborador.");
+            return;
+        }
+        
+        const temOcorrencias = ocorrencias.some(occ => occ.colaboradorId === id);
+        if (temOcorrencias) {
+            alert("Este colaborador possui ausências. Exclua as ausências primeiro.");
+            return;
+        }
+        
+        if (confirm("Excluir colaborador?")) {
+            colaboradores = colaboradores.filter(c => c.id !== id);
+            salvarDadosLocal();
+            
+            if (isOnline) {
+                try {
+                    await supabase.from('colaboradores').delete().eq('id', id);
+                } catch (error) {
+                    console.error('Erro ao excluir colaborador:', error);
+                }
+            }
+            
+            renderizarTudo();
+        }
     }
 
     function obterCorColaborador(colabId) {
@@ -420,75 +652,12 @@
     }
 
     function getPrimeiroDiaSemana(ano, mes) {
-        let dia = new Date(ano, mes, 1).getDay();
-        return dia;
+        return new Date(ano, mes, 1).getDay();
     }
 
     function obterOcorrenciasDoDia(ano, mes, dia) {
         const dataStr = `${ano}-${String(mes+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
         return ocorrencias.filter(occ => occ.data === dataStr);
-    }
-
-    function adicionarOcorrencia(data, colaboradorId, motivo) {
-        ocorrencias.push({ id: Date.now(), data, colaboradorId, motivo });
-        salvarDados();
-        renderizarTudo();
-    }
-
-    function editarOcorrencia(id, novaData, novoColaboradorId, novoMotivo) {
-        const index = ocorrencias.findIndex(occ => occ.id === id);
-        if (index !== -1) {
-            ocorrencias[index] = { ...ocorrencias[index], data: novaData, colaboradorId: novoColaboradorId, motivo: novoMotivo };
-            salvarDados();
-            renderizarTudo();
-        }
-    }
-
-    function excluirOcorrencia(id) {
-        ocorrencias = ocorrencias.filter(occ => occ.id !== id);
-        salvarDados();
-        renderizarTudo();
-    }
-
-    function adicionarColaborador(nome) {
-        const novaCor = coresExtras[(colaboradores.length - 6) % coresExtras.length];
-        const novoId = colaboradores.length > 0 ? Math.max(...colaboradores.map(c => c.id)) + 1 : 7;
-        colaboradores.push({ id: novoId, nome, cor: novaCor });
-        salvarDados();
-        renderizarTudo();
-    }
-
-    function editarColaborador(id, novoNome) {
-        const colab = colaboradores.find(c => c.id === id);
-        if (colab) colab.nome = novoNome;
-        salvarDados();
-        renderizarTudo();
-    }
-
-    function excluirColaborador(id) {
-        if (colaboradores.length <= 1) {
-            alert("Não é possível excluir o único colaborador.");
-            return;
-        }
-        const temOcorrencias = ocorrencias.some(occ => occ.colaboradorId === id);
-        if (temOcorrencias) {
-            alert("Este colaborador possui ausências. Exclua as ausências primeiro.");
-            return;
-        }
-        if(confirm("Excluir colaborador?")) {
-            colaboradores = colaboradores.filter(c => c.id !== id);
-            salvarDados();
-            renderizarTudo();
-        }
-    }
-
-    function contagemPorColaborador() {
-        const contagem = {};
-        colaboradores.forEach(c => contagem[c.id] = 0);
-        ocorrencias.forEach(occ => {
-            if (contagem[occ.colaboradorId] !== undefined) contagem[occ.colaboradorId]++;
-        });
-        return contagem;
     }
 
     function excluirOcorrenciaDireta(id, event) {
@@ -711,6 +880,15 @@
         return cores[classe] || '#999';
     }
 
+    function contagemPorColaborador() {
+        const contagem = {};
+        colaboradores.forEach(c => contagem[c.id] = 0);
+        ocorrencias.forEach(occ => {
+            if (contagem[occ.colaboradorId] !== undefined) contagem[occ.colaboradorId]++;
+        });
+        return contagem;
+    }
+
     function renderizarResumo() {
         const container = document.getElementById("resumoContagens");
         const contagem = contagemPorColaborador();
@@ -733,7 +911,7 @@
     };
 
     window.excluirColab = (id) => {
-        if (confirm("Excluir colaborador?")) excluirColaborador(id);
+        excluirColaborador(id);
     };
 
     function atualizarAno() {
@@ -756,8 +934,8 @@
         if (e.target === document.getElementById("modal")) fecharModal();
     });
 
-    carregarDados();
-    renderizarTudo();
+    atualizarStatusConexao();
+    carregarDadosDoBanco();
 
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('sw.js').then(reg => {
