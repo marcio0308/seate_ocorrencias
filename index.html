@@ -302,7 +302,7 @@
         }
 
         .status-conexao {
-            background: #4a90c4;
+            background: #28a745;
             color: white;
             padding: 8px;
             text-align: center;
@@ -311,8 +311,13 @@
             margin-bottom: 10px;
         }
 
-        .status-conexao.offline {
-            background: #c44a4a;
+        .status-conexao.erro {
+            background: #dc3545;
+        }
+
+        .status-conexao.sincronizando {
+            background: #ffc107;
+            color: #333;
         }
 
         @media (max-width: 480px) {
@@ -344,7 +349,7 @@
 <div class="container">
     <h1>Controle de Ausências</h1>
 
-    <div id="statusConexao" class="status-conexao">Conectando ao servidor...</div>
+    <div id="statusConexao" class="status-conexao">Carregando dados...</div>
 
     <div class="barra-ferramentas">
         <label>Ano:</label>
@@ -393,61 +398,58 @@
     </div>
 </div>
 
-<script type="module">
+<script>
     // Configuração do Supabase
     const SUPABASE_URL = 'https://jpmwryzvgsxbdjdmuoou.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwbXdyeXp2Z3N4YmRqZG11b291Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMTM4MDksImV4cCI6MjA5NTg4OTgwOX0.E7yO8lZTqskg21ctXtiQW5oYnt1CKD89J4MKwzHhDaQ';
 
-    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-    
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
+    let supabaseClient = null;
     let colaboradores = [];
     let ocorrencias = [];
     let anoAtual = 2026;
-    let isOnline = navigator.onLine;
 
-    function atualizarStatusConexao() {
-        const statusDiv = document.getElementById('statusConexao');
-        if (isOnline) {
-            statusDiv.textContent = 'Conectado ao servidor';
-            statusDiv.className = 'status-conexao';
-        } else {
-            statusDiv.textContent = 'Modo offline - Dados locais';
-            statusDiv.className = 'status-conexao offline';
-        }
+    // Inicializar Supabase
+    async function initSupabase() {
+        const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+        supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        await carregarDadosDoBanco();
     }
 
-    window.addEventListener('online', () => {
-        isOnline = true;
-        atualizarStatusConexao();
-        carregarDadosDoBanco();
-    });
-
-    window.addEventListener('offline', () => {
-        isOnline = false;
-        atualizarStatusConexao();
-    });
+    async function mostrarStatus(mensagem, tipo = 'normal') {
+        const statusDiv = document.getElementById('statusConexao');
+        statusDiv.textContent = mensagem;
+        if (tipo === 'erro') {
+            statusDiv.className = 'status-conexao erro';
+        } else if (tipo === 'sincronizando') {
+            statusDiv.className = 'status-conexao sincronizando';
+        } else {
+            statusDiv.className = 'status-conexao';
+        }
+        setTimeout(() => {
+            if (statusDiv.className !== 'status-conexao erro') {
+                statusDiv.className = 'status-conexao';
+                statusDiv.textContent = 'Conectado ao banco de dados';
+            }
+        }, 3000);
+    }
 
     async function carregarDadosDoBanco() {
-        if (!isOnline) {
-            carregarDadosLocal();
-            return;
-        }
-
         try {
-            const [colabsRes, ocorrRes] = await Promise.all([
-                supabase.from('colaboradores').select('*').order('id'),
-                supabase.from('ocorrencias').select('*')
-            ]);
-
-            if (colabsRes.error) throw colabsRes.error;
-            if (ocorrRes.error) throw ocorrRes.error;
-
-            if (colabsRes.data && colabsRes.data.length > 0) {
-                colaboradores = colabsRes.data;
+            mostrarStatus('Carregando colaboradores...', 'sincronizando');
+            
+            // Carregar colaboradores
+            const { data: colabsData, error: colabsError } = await supabaseClient
+                .from('colaboradores')
+                .select('*')
+                .order('id');
+            
+            if (colabsError) throw colabsError;
+            
+            if (colabsData && colabsData.length > 0) {
+                colaboradores = colabsData;
             } else {
-                colaboradores = [
+                // Inserir dados padrão se não existirem
+                const colaboradoresPadrao = [
                     { id: 1, nome: "Anna Flávia", cor: "colab-rosa" },
                     { id: 2, nome: "Daniela", cor: "colab-verde" },
                     { id: 3, nome: "Denise", cor: "colab-laranja" },
@@ -455,13 +457,36 @@
                     { id: 5, nome: "Ivone", cor: "colab-vermelho" },
                     { id: 6, nome: "Paulo", cor: "colab-azul" }
                 ];
+                
+                for (const colab of colaboradoresPadrao) {
+                    await supabaseClient.from('colaboradores').insert([colab]);
+                }
+                colaboradores = colaboradoresPadrao;
             }
             
-            ocorrencias = ocorrRes.data || [];
-            salvarDadosLocal();
+            mostrarStatus('Carregando ocorrências...', 'sincronizando');
+            
+            // Carregar ocorrências
+            const { data: ocorrData, error: ocorrError } = await supabaseClient
+                .from('ocorrencias')
+                .select('*');
+            
+            if (ocorrError) throw ocorrError;
+            
+            ocorrencias = (ocorrData || []).map(occ => ({
+                id: occ.id,
+                data: occ.data,
+                colaboradorId: occ.colaborador_id,
+                motivo: occ.motivo
+            }));
+            
+            mostrarStatus('Dados carregados com sucesso!');
             renderizarTudo();
+            
         } catch (error) {
             console.error('Erro ao carregar dados:', error);
+            mostrarStatus('Erro ao carregar dados: ' + error.message, 'erro');
+            // Tentar carregar do localStorage como fallback
             carregarDadosLocal();
         }
     }
@@ -497,78 +522,96 @@
         localStorage.setItem("ocorrencias_pwa", JSON.stringify(ocorrencias));
     }
 
-    async function sincronizarComBanco() {
-        if (!isOnline) return;
+    async function adicionarOcorrencia(data, colaboradorId, motivo) {
+        const novaOcorrencia = {
+            id: Date.now(),
+            data: data,
+            colaborador_id: colaboradorId,
+            motivo: motivo
+        };
+        
+        mostrarStatus('Salvando ausência...', 'sincronizando');
         
         try {
-            for (const colab of colaboradores) {
-                const { error } = await supabase
-                    .from('colaboradores')
-                    .upsert(colab, { onConflict: 'id' });
-                if (error) console.error('Erro ao sincronizar colaborador:', error);
-            }
+            const { error } = await supabaseClient
+                .from('ocorrencias')
+                .insert([novaOcorrencia]);
             
-            for (const occ of ocorrencias) {
-                const { error } = await supabase
-                    .from('ocorrencias')
-                    .upsert(occ, { onConflict: 'id' });
-                if (error) console.error('Erro ao sincronizar ocorrência:', error);
-            }
-        } catch (error) {
-            console.error('Erro na sincronização:', error);
-        }
-    }
-
-    async function adicionarOcorrencia(data, colaboradorId, motivo) {
-        const novaOcorrencia = { id: Date.now(), data, colaboradorId, motivo };
-        ocorrencias.push(novaOcorrencia);
-        salvarDadosLocal();
-        
-        if (isOnline) {
-            try {
-                await supabase.from('ocorrencias').insert([novaOcorrencia]);
-            } catch (error) {
-                console.error('Erro ao salvar no banco:', error);
-            }
-        }
-        
-        renderizarTudo();
-    }
-
-    async function editarOcorrencia(id, novaData, novoColaboradorId, novoMotivo) {
-        const index = ocorrencias.findIndex(occ => occ.id === id);
-        if (index !== -1) {
-            ocorrencias[index] = { ...ocorrencias[index], data: novaData, colaboradorId: novoColaboradorId, motivo: novoMotivo };
+            if (error) throw error;
+            
+            // Adicionar ao array local
+            ocorrencias.push({
+                id: novaOcorrencia.id,
+                data: novaOcorrencia.data,
+                colaboradorId: novaOcorrencia.colaborador_id,
+                motivo: novaOcorrencia.motivo
+            });
+            
             salvarDadosLocal();
-            
-            if (isOnline) {
-                try {
-                    await supabase
-                        .from('ocorrencias')
-                        .update({ data: novaData, colaboradorId: novoColaboradorId, motivo: novoMotivo })
-                        .eq('id', id);
-                } catch (error) {
-                    console.error('Erro ao editar no banco:', error);
-                }
-            }
-            
             renderizarTudo();
+            mostrarStatus('Ausência salva com sucesso!');
+            
+        } catch (error) {
+            console.error('Erro ao salvar:', error);
+            mostrarStatus('Erro ao salvar: ' + error.message, 'erro');
         }
     }
 
     async function excluirOcorrencia(id) {
-        ocorrencias = ocorrencias.filter(occ => occ.id !== id);
-        salvarDadosLocal();
+        mostrarStatus('Excluindo ausência...', 'sincronizando');
         
-        if (isOnline) {
-            try {
-                await supabase.from('ocorrencias').delete().eq('id', id);
-            } catch (error) {
-                console.error('Erro ao excluir do banco:', error);
-            }
+        try {
+            const { error } = await supabaseClient
+                .from('ocorrencias')
+                .delete()
+                .eq('id', id);
+            
+            if (error) throw error;
+            
+            ocorrencias = ocorrencias.filter(occ => occ.id !== id);
+            salvarDadosLocal();
+            renderizarTudo();
+            mostrarStatus('Ausência excluída com sucesso!');
+            
+        } catch (error) {
+            console.error('Erro ao excluir:', error);
+            mostrarStatus('Erro ao excluir: ' + error.message, 'erro');
         }
+    }
+
+    async function editarOcorrencia(id, novaData, novoColaboradorId, novoMotivo) {
+        mostrarStatus('Atualizando ausência...', 'sincronizando');
         
-        renderizarTudo();
+        try {
+            const { error } = await supabaseClient
+                .from('ocorrencias')
+                .update({
+                    data: novaData,
+                    colaborador_id: novoColaboradorId,
+                    motivo: novoMotivo
+                })
+                .eq('id', id);
+            
+            if (error) throw error;
+            
+            const index = ocorrencias.findIndex(occ => occ.id === id);
+            if (index !== -1) {
+                ocorrencias[index] = {
+                    id: id,
+                    data: novaData,
+                    colaboradorId: novoColaboradorId,
+                    motivo: novoMotivo
+                };
+            }
+            
+            salvarDadosLocal();
+            renderizarTudo();
+            mostrarStatus('Ausência atualizada com sucesso!');
+            
+        } catch (error) {
+            console.error('Erro ao atualizar:', error);
+            mostrarStatus('Erro ao atualizar: ' + error.message, 'erro');
+        }
     }
 
     async function adicionarColaborador(nome) {
@@ -577,35 +620,47 @@
         const novoId = colaboradores.length > 0 ? Math.max(...colaboradores.map(c => c.id)) + 1 : 7;
         const novoColab = { id: novoId, nome, cor: novaCor };
         
-        colaboradores.push(novoColab);
-        salvarDadosLocal();
+        mostrarStatus('Salvando colaborador...', 'sincronizando');
         
-        if (isOnline) {
-            try {
-                await supabase.from('colaboradores').insert([novoColab]);
-            } catch (error) {
-                console.error('Erro ao salvar colaborador:', error);
-            }
+        try {
+            const { error } = await supabaseClient
+                .from('colaboradores')
+                .insert([novoColab]);
+            
+            if (error) throw error;
+            
+            colaboradores.push(novoColab);
+            salvarDadosLocal();
+            renderizarTudo();
+            mostrarStatus('Colaborador salvo com sucesso!');
+            
+        } catch (error) {
+            console.error('Erro ao salvar colaborador:', error);
+            mostrarStatus('Erro ao salvar colaborador: ' + error.message, 'erro');
         }
-        
-        renderizarTudo();
     }
 
     async function editarColaborador(id, novoNome) {
-        const colab = colaboradores.find(c => c.id === id);
-        if (colab) {
-            colab.nome = novoNome;
+        mostrarStatus('Atualizando colaborador...', 'sincronizando');
+        
+        try {
+            const { error } = await supabaseClient
+                .from('colaboradores')
+                .update({ nome: novoNome })
+                .eq('id', id);
+            
+            if (error) throw error;
+            
+            const colab = colaboradores.find(c => c.id === id);
+            if (colab) colab.nome = novoNome;
+            
             salvarDadosLocal();
-            
-            if (isOnline) {
-                try {
-                    await supabase.from('colaboradores').update({ nome: novoNome }).eq('id', id);
-                } catch (error) {
-                    console.error('Erro ao editar colaborador:', error);
-                }
-            }
-            
             renderizarTudo();
+            mostrarStatus('Colaborador atualizado com sucesso!');
+            
+        } catch (error) {
+            console.error('Erro ao editar colaborador:', error);
+            mostrarStatus('Erro ao editar colaborador: ' + error.message, 'erro');
         }
     }
 
@@ -621,19 +676,26 @@
             return;
         }
         
-        if (confirm("Excluir colaborador?")) {
+        if (!confirm("Excluir colaborador?")) return;
+        
+        mostrarStatus('Excluindo colaborador...', 'sincronizando');
+        
+        try {
+            const { error } = await supabaseClient
+                .from('colaboradores')
+                .delete()
+                .eq('id', id);
+            
+            if (error) throw error;
+            
             colaboradores = colaboradores.filter(c => c.id !== id);
             salvarDadosLocal();
-            
-            if (isOnline) {
-                try {
-                    await supabase.from('colaboradores').delete().eq('id', id);
-                } catch (error) {
-                    console.error('Erro ao excluir colaborador:', error);
-                }
-            }
-            
             renderizarTudo();
+            mostrarStatus('Colaborador excluído com sucesso!');
+            
+        } catch (error) {
+            console.error('Erro ao excluir colaborador:', error);
+            mostrarStatus('Erro ao excluir colaborador: ' + error.message, 'erro');
         }
     }
 
@@ -934,8 +996,8 @@
         if (e.target === document.getElementById("modal")) fecharModal();
     });
 
-    atualizarStatusConexao();
-    carregarDadosDoBanco();
+    // Iniciar aplicação
+    initSupabase();
 
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('sw.js').then(reg => {
