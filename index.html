@@ -6,7 +6,6 @@
     <meta name="theme-color" content="#4a90c4">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="Ausências">
-    <link rel="manifest" href="manifest.json">
     <title>Controle de Ausências</title>
     <style>
         * {
@@ -38,13 +37,6 @@
             color: #333;
             margin-bottom: 16px;
             font-weight: 600;
-        }
-
-        h2, h3 {
-            font-size: 18px;
-            color: #555;
-            margin-bottom: 12px;
-            font-weight: 500;
         }
 
         .barra-ferramentas {
@@ -170,10 +162,6 @@
             min-width: 20px;
         }
 
-        .btn-remover-ocorrencia:active {
-            background: rgba(0,0,0,0.6);
-        }
-
         .colab-rosa { background: #e83e8c; }
         .colab-verde { background: #5cb85c; }
         .colab-laranja { background: #f0ad4e; }
@@ -291,16 +279,6 @@
             flex: 1;
         }
 
-        .instrucao-pwa {
-            background: #e8f4fd;
-            padding: 12px;
-            border-radius: 8px;
-            margin-top: 16px;
-            font-size: 12px;
-            color: #4a90c4;
-            text-align: center;
-        }
-
         .status-conexao {
             background: #28a745;
             color: white;
@@ -338,10 +316,6 @@
                 font-size: 8px;
                 padding: 2px 3px;
             }
-            .btn-remover-ocorrencia {
-                font-size: 8px;
-                padding: 1px 4px;
-            }
         }
     </style>
 </head>
@@ -349,7 +323,7 @@
 <div class="container">
     <h1>Controle de Ausências</h1>
 
-    <div id="statusConexao" class="status-conexao">Carregando dados...</div>
+    <div id="statusConexao" class="status-conexao">Conectando ao banco de dados...</div>
 
     <div class="barra-ferramentas">
         <label>Ano:</label>
@@ -381,10 +355,6 @@
             </div>
         </div>
     </div>
-
-    <div class="instrucao-pwa">
-        Para instalar este app no seu dispositivo, toque em Compartilhar e depois em Adicionar à Tela de Início
-    </div>
 </div>
 
 <div id="modal" class="modal">
@@ -399,7 +369,6 @@
 </div>
 
 <script>
-    // Configuração do Supabase
     const SUPABASE_URL = 'https://jpmwryzvgsxbdjdmuoou.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwbXdyeXp2Z3N4YmRqZG11b291Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMTM4MDksImV4cCI6MjA5NTg4OTgwOX0.E7yO8lZTqskg21ctXtiQW5oYnt1CKD89J4MKwzHhDaQ';
 
@@ -408,14 +377,7 @@
     let ocorrencias = [];
     let anoAtual = 2026;
 
-    // Inicializar Supabase
-    async function initSupabase() {
-        const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-        supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        await carregarDadosDoBanco();
-    }
-
-    async function mostrarStatus(mensagem, tipo = 'normal') {
+    function mostrarStatus(mensagem, tipo = 'normal') {
         const statusDiv = document.getElementById('statusConexao');
         statusDiv.textContent = mensagem;
         if (tipo === 'erro') {
@@ -425,19 +387,24 @@
         } else {
             statusDiv.className = 'status-conexao';
         }
-        setTimeout(() => {
-            if (statusDiv.className !== 'status-conexao erro') {
-                statusDiv.className = 'status-conexao';
-                statusDiv.textContent = 'Conectado ao banco de dados';
-            }
-        }, 3000);
     }
 
-    async function carregarDadosDoBanco() {
+    async function initSupabase() {
+        try {
+            const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+            supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            await carregarDados();
+        } catch (error) {
+            console.error('Erro ao inicializar Supabase:', error);
+            mostrarStatus('Erro de conexão com o banco', 'erro');
+            carregarDadosLocal();
+        }
+    }
+
+    async function carregarDados() {
         try {
             mostrarStatus('Carregando colaboradores...', 'sincronizando');
             
-            // Carregar colaboradores
             const { data: colabsData, error: colabsError } = await supabaseClient
                 .from('colaboradores')
                 .select('*')
@@ -448,8 +415,7 @@
             if (colabsData && colabsData.length > 0) {
                 colaboradores = colabsData;
             } else {
-                // Inserir dados padrão se não existirem
-                const colaboradoresPadrao = [
+                colaboradores = [
                     { id: 1, nome: "Anna Flávia", cor: "colab-rosa" },
                     { id: 2, nome: "Daniela", cor: "colab-verde" },
                     { id: 3, nome: "Denise", cor: "colab-laranja" },
@@ -458,15 +424,13 @@
                     { id: 6, nome: "Paulo", cor: "colab-azul" }
                 ];
                 
-                for (const colab of colaboradoresPadrao) {
+                for (const colab of colaboradores) {
                     await supabaseClient.from('colaboradores').insert([colab]);
                 }
-                colaboradores = colaboradoresPadrao;
             }
             
             mostrarStatus('Carregando ocorrências...', 'sincronizando');
             
-            // Carregar ocorrências
             const { data: ocorrData, error: ocorrError } = await supabaseClient
                 .from('ocorrencias')
                 .select('*');
@@ -480,13 +444,13 @@
                 motivo: occ.motivo
             }));
             
-            mostrarStatus('Dados carregados com sucesso!');
+            salvarDadosLocal();
             renderizarTudo();
+            mostrarStatus('Conectado ao banco de dados');
             
         } catch (error) {
-            console.error('Erro ao carregar dados:', error);
-            mostrarStatus('Erro ao carregar dados: ' + error.message, 'erro');
-            // Tentar carregar do localStorage como fallback
+            console.error('Erro:', error);
+            mostrarStatus('Erro: ' + error.message, 'erro');
             carregarDadosLocal();
         }
     }
@@ -515,6 +479,7 @@
         }
         
         renderizarTudo();
+        mostrarStatus('Modo offline - dados locais');
     }
 
     function salvarDadosLocal() {
@@ -530,7 +495,7 @@
             motivo: motivo
         };
         
-        mostrarStatus('Salvando ausência...', 'sincronizando');
+        mostrarStatus('Salvando...', 'sincronizando');
         
         try {
             const { error } = await supabaseClient
@@ -539,7 +504,6 @@
             
             if (error) throw error;
             
-            // Adicionar ao array local
             ocorrencias.push({
                 id: novaOcorrencia.id,
                 data: novaOcorrencia.data,
@@ -549,16 +513,25 @@
             
             salvarDadosLocal();
             renderizarTudo();
-            mostrarStatus('Ausência salva com sucesso!');
+            mostrarStatus('Salvo com sucesso!');
             
         } catch (error) {
-            console.error('Erro ao salvar:', error);
+            console.error('Erro:', error);
             mostrarStatus('Erro ao salvar: ' + error.message, 'erro');
+            // Fallback: salvar apenas localmente
+            ocorrencias.push({
+                id: novaOcorrencia.id,
+                data: novaOcorrencia.data,
+                colaboradorId: novaOcorrencia.colaborador_id,
+                motivo: novaOcorrencia.motivo
+            });
+            salvarDadosLocal();
+            renderizarTudo();
         }
     }
 
     async function excluirOcorrencia(id) {
-        mostrarStatus('Excluindo ausência...', 'sincronizando');
+        mostrarStatus('Excluindo...', 'sincronizando');
         
         try {
             const { error } = await supabaseClient
@@ -571,46 +544,15 @@
             ocorrencias = ocorrencias.filter(occ => occ.id !== id);
             salvarDadosLocal();
             renderizarTudo();
-            mostrarStatus('Ausência excluída com sucesso!');
+            mostrarStatus('Excluído com sucesso!');
             
         } catch (error) {
-            console.error('Erro ao excluir:', error);
+            console.error('Erro:', error);
             mostrarStatus('Erro ao excluir: ' + error.message, 'erro');
-        }
-    }
-
-    async function editarOcorrencia(id, novaData, novoColaboradorId, novoMotivo) {
-        mostrarStatus('Atualizando ausência...', 'sincronizando');
-        
-        try {
-            const { error } = await supabaseClient
-                .from('ocorrencias')
-                .update({
-                    data: novaData,
-                    colaborador_id: novoColaboradorId,
-                    motivo: novoMotivo
-                })
-                .eq('id', id);
-            
-            if (error) throw error;
-            
-            const index = ocorrencias.findIndex(occ => occ.id === id);
-            if (index !== -1) {
-                ocorrencias[index] = {
-                    id: id,
-                    data: novaData,
-                    colaboradorId: novoColaboradorId,
-                    motivo: novoMotivo
-                };
-            }
-            
+            // Fallback: excluir apenas localmente
+            ocorrencias = ocorrencias.filter(occ => occ.id !== id);
             salvarDadosLocal();
             renderizarTudo();
-            mostrarStatus('Ausência atualizada com sucesso!');
-            
-        } catch (error) {
-            console.error('Erro ao atualizar:', error);
-            mostrarStatus('Erro ao atualizar: ' + error.message, 'erro');
         }
     }
 
@@ -632,35 +574,15 @@
             colaboradores.push(novoColab);
             salvarDadosLocal();
             renderizarTudo();
-            mostrarStatus('Colaborador salvo com sucesso!');
+            mostrarStatus('Colaborador salvo!');
             
         } catch (error) {
-            console.error('Erro ao salvar colaborador:', error);
+            console.error('Erro:', error);
             mostrarStatus('Erro ao salvar colaborador: ' + error.message, 'erro');
-        }
-    }
-
-    async function editarColaborador(id, novoNome) {
-        mostrarStatus('Atualizando colaborador...', 'sincronizando');
-        
-        try {
-            const { error } = await supabaseClient
-                .from('colaboradores')
-                .update({ nome: novoNome })
-                .eq('id', id);
-            
-            if (error) throw error;
-            
-            const colab = colaboradores.find(c => c.id === id);
-            if (colab) colab.nome = novoNome;
-            
+            // Fallback: salvar apenas localmente
+            colaboradores.push(novoColab);
             salvarDadosLocal();
             renderizarTudo();
-            mostrarStatus('Colaborador atualizado com sucesso!');
-            
-        } catch (error) {
-            console.error('Erro ao editar colaborador:', error);
-            mostrarStatus('Erro ao editar colaborador: ' + error.message, 'erro');
         }
     }
 
@@ -691,11 +613,15 @@
             colaboradores = colaboradores.filter(c => c.id !== id);
             salvarDadosLocal();
             renderizarTudo();
-            mostrarStatus('Colaborador excluído com sucesso!');
+            mostrarStatus('Colaborador excluído!');
             
         } catch (error) {
-            console.error('Erro ao excluir colaborador:', error);
+            console.error('Erro:', error);
             mostrarStatus('Erro ao excluir colaborador: ' + error.message, 'erro');
+            // Fallback: excluir apenas localmente
+            colaboradores = colaboradores.filter(c => c.id !== id);
+            salvarDadosLocal();
+            renderizarTudo();
         }
     }
 
@@ -761,7 +687,7 @@
                 return;
             }
             if (modalDados.id) {
-                editarOcorrencia(modalDados.id, data, colaboradorId, motivo);
+                alert("Edição não disponível no momento. Exclua e crie uma nova.");
             } else {
                 adicionarOcorrencia(data, colaboradorId, motivo);
             }
@@ -802,7 +728,7 @@
                 return;
             }
             if (modalDados.id) {
-                editarColaborador(modalDados.id, nome);
+                alert("Edição não disponível. Exclua e crie um novo.");
             } else {
                 adicionarColaborador(nome);
             }
@@ -996,16 +922,7 @@
         if (e.target === document.getElementById("modal")) fecharModal();
     });
 
-    // Iniciar aplicação
     initSupabase();
-
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('sw.js').then(reg => {
-            console.log('Service Worker registrado');
-        }).catch(err => {
-            console.log('Falha ao registrar Service Worker');
-        });
-    }
 </script>
 </body>
 </html>
