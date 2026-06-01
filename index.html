@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#4a90c4">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Ausências">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <title>Controle de Ausências</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: #e0e0e0;
+            padding: 12px;
+            padding-bottom: 80px;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            overflow: hidden;
+            padding: 16px;
+        }
+
+        h1 {
+            font-size: 22px;
+            color: #333;
+            margin-bottom: 16px;
+            font-weight: 600;
+        }
+
+        h2, h3 {
+            font-size: 18px;
+            color: #555;
+            margin-bottom: 12px;
+            font-weight: 500;
+        }
+
+        .barra-ferramentas {
+            background: #f5f5f5;
+            padding: 12px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        select, input, button, textarea {
+            padding: 10px 12px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            font-size: 16px;
+            font-family: inherit;
+        }
+
+        button {
+            background: #4a90c4;
+            color: white;
+            cursor: pointer;
+            border: none;
+            font-weight: 500;
+            transition: opacity 0.2s;
+        }
+
+        button:active {
+            opacity: 0.7;
+        }
+
+        button.secundario {
+            background: #666;
+        }
+
+        button.perigo {
+            background: #c44a4a;
+        }
+
+        .grid-meses {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card-mes {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .mes-titulo {
+            background: #f5f5f5;
+            padding: 12px;
+            font-weight: bold;
+            border-bottom: 1px solid #ddd;
+            text-align: center;
+            font-size: 16px;
+        }
+
+        .dias-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            font-size: 11px;
+        }
+
+        .dia-celula {
+            min-height: 80px;
+            border: 1px solid #eee;
+            padding: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .dia-celula:active {
+            background: #f0f0f0;
+        }
+
+        .numero-dia {
+            font-weight: bold;
+            font-size: 12px;
+            margin-bottom: 4px;
+            color: #333;
+        }
+
+        .ocorrencia {
+            font-size: 9px;
+            padding: 3px 4px;
+            margin: 2px 0;
+            border-radius: 4px;
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .ocorrencia-texto {
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .btn-remover-ocorrencia {
+            background: rgba(0,0,0,0.3);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 9px;
+            padding: 2px 6px;
+            min-width: 20px;
+        }
+
+        .btn-remover-ocorrencia:active {
+            background: rgba(0,0,0,0.6);
+        }
+
+        .colab-rosa { background: #e83e8c; }
+        .colab-verde { background: #5cb85c; }
+        .colab-laranja { background: #f0ad4e; }
+        .colab-roxo { background: #aa66cc; }
+        .colab-vermelho { background: #d9534f; }
+        .colab-azul { background: #4a90c4; }
+        .colab-cinza { background: #6c757d; }
+        .colab-marrom { background: #8b5a2b; }
+        .colab-azul-claro { background: #5bc0de; }
+
+        .painel-lateral {
+            margin-top: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .lista {
+            border: 1px solid #ddd;
+            padding: 12px;
+            border-radius: 12px;
+            background: #fafafa;
+        }
+
+        .lista-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .lista-item button {
+            padding: 6px 12px;
+            font-size: 13px;
+        }
+
+        .quadrado-cor {
+            width: 24px;
+            height: 24px;
+            display: inline-block;
+            margin-right: 8px;
+            border-radius: 4px;
+        }
+
+        .contador {
+            background: #4a90c4;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .modal-conteudo {
+            background: white;
+            width: 100%;
+            max-width: 400px;
+            padding: 20px;
+            border-radius: 16px;
+            animation: slideUp 0.3s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .botoes-acoes {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+
+        .botoes-acoes button {
+            flex: 1;
+        }
+
+        .instrucao-pwa {
+            background: #e8f4fd;
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 16px;
+            font-size: 12px;
+            color: #4a90c4;
+            text-align: center;
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 8px;
+            }
+            .container {
+                padding: 12px;
+            }
+            .dia-celula {
+                min-height: 70px;
+                padding: 3px;
+            }
+            .numero-dia {
+                font-size: 11px;
+            }
+            .ocorrencia {
+                font-size: 8px;
+                padding: 2px 3px;
+            }
+            .btn-remover-ocorrencia {
+                font-size: 8px;
+                padding: 1px 4px;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Controle de Ausências</h1>
+
+    <div class="barra-ferramentas">
+        <label>Ano:</label>
+        <select id="selecionarAno">
+            <option value="2026">2026</option>
+            <option value="2027">2027</option>
+            <option value="2028">2028</option>
+            <option value="2029">2029</option>
+            <option value="2030">2030</option>
+        </select>
+    </div>
+
+    <div id="agendaMensal" class="grid-meses"></div>
+
+    <div class="painel-lateral">
+        <div class="lista">
+            <h3>Colaboradores</h3>
+            <div id="listaColaboradores"></div>
+            <button id="novoColaboradorBtn" style="margin-top: 12px; width: 100%;">Novo Colaborador</button>
+        </div>
+        <div class="lista">
+            <h3>Solicitações por Colaborador</h3>
+            <div id="resumoContagens"></div>
+        </div>
+    </div>
+
+    <div class="instrucao-pwa">
+        Para instalar este app no seu dispositivo, toque em Compartilhar e depois em Adicionar à Tela de Início
+    </div>
+</div>
+
+<div id="modal" class="modal">
+    <div class="modal-conteudo">
+        <h3 id="modalTitulo"></h3>
+        <div id="modalCorpo"></div>
+        <div class="botoes-acoes">
+            <button id="modalCancelar" style="background:#999;">Cancelar</button>
+            <button id="modalSalvar">Salvar</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let colaboradores = [
+        { id: 1, nome: "Anna Flávia", cor: "colab-rosa" },
+        { id: 2, nome: "Daniela", cor: "colab-verde" },
+        { id: 3, nome: "Denise", cor: "colab-laranja" },
+        { id: 4, nome: "Isabelle", cor: "colab-roxo" },
+        { id: 5, nome: "Ivone", cor: "colab-vermelho" },
+        { id: 6, nome: "Paulo", cor: "colab-azul" }
+    ];
+
+    let ocorrencias = [];
+    let anoAtual = 2026;
+
+    const coresExtras = ["colab-cinza", "colab-marrom", "colab-azul-claro"];
+
+    function carregarDados() {
+        const storedColabs = localStorage.getItem("colaboradores_pwa");
+        const storedOcorr = localStorage.getItem("ocorrencias_pwa");
+        if (storedColabs) colaboradores = JSON.parse(storedColabs);
+        if (storedOcorr) ocorrencias = JSON.parse(storedOcorr);
+        if (colaboradores.length === 0) {
+            colaboradores = [
+                { id: 1, nome: "Anna Flávia", cor: "colab-rosa" },
+                { id: 2, nome: "Daniela", cor: "colab-verde" },
+                { id: 3, nome: "Denise", cor: "colab-laranja" },
+                { id: 4, nome: "Isabelle", cor: "colab-roxo" },
+                { id: 5, nome: "Ivone", cor: "colab-vermelho" },
+                { id: 6, nome: "Paulo", cor: "colab-azul" }
+            ];
+        }
+        salvarDados();
+    }
+
+    function salvarDados() {
+        localStorage.setItem("colaboradores_pwa", JSON.stringify(colaboradores));
+        localStorage.setItem("ocorrencias_pwa", JSON.stringify(ocorrencias));
+    }
+
+    function obterCorColaborador(colabId) {
+        const colab = colaboradores.find(c => c.id === colabId);
+        return colab ? colab.cor : "colab-cinza";
+    }
+
+    function obterNomeColaborador(colabId) {
+        const colab = colaboradores.find(c => c.id === colabId);
+        return colab ? colab.nome : "Desconhecido";
+    }
+
+    function getDiasNoMes(ano, mes) {
+        return new Date(ano, mes + 1, 0).getDate();
+    }
+
+    function getPrimeiroDiaSemana(ano, mes) {
+        let dia = new Date(ano, mes, 1).getDay();
+        return dia;
+    }
+
+    function obterOcorrenciasDoDia(ano, mes, dia) {
+        const dataStr = `${ano}-${String(mes+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
+        return ocorrencias.filter(occ => occ.data === dataStr);
+    }
+
+    function adicionarOcorrencia(data, colaboradorId, motivo) {
+        ocorrencias.push({ id: Date.now(), data, colaboradorId, motivo });
+        salvarDados();
+        renderizarTudo();
+    }
+
+    function editarOcorrencia(id, novaData, novoColaboradorId, novoMotivo) {
+        const index = ocorrencias.findIndex(occ => occ.id === id);
+        if (index !== -1) {
+            ocorrencias[index] = { ...ocorrencias[index], data: novaData, colaboradorId: novoColaboradorId, motivo: novoMotivo };
+            salvarDados();
+            renderizarTudo();
+        }
+    }
+
+    function excluirOcorrencia(id) {
+        ocorrencias = ocorrencias.filter(occ => occ.id !== id);
+        salvarDados();
+        renderizarTudo();
+    }
+
+    function adicionarColaborador(nome) {
+        const novaCor = coresExtras[(colaboradores.length - 6) % coresExtras.length];
+        const novoId = colaboradores.length > 0 ? Math.max(...colaboradores.map(c => c.id)) + 1 : 7;
+        colaboradores.push({ id: novoId, nome, cor: novaCor });
+        salvarDados();
+        renderizarTudo();
+    }
+
+    function editarColaborador(id, novoNome) {
+        const colab = colaboradores.find(c => c.id === id);
+        if (colab) colab.nome = novoNome;
+        salvarDados();
+        renderizarTudo();
+    }
+
+    function excluirColaborador(id) {
+        if (colaboradores.length <= 1) {
+            alert("Não é possível excluir o único colaborador.");
+            return;
+        }
+        const temOcorrencias = ocorrencias.some(occ => occ.colaboradorId === id);
+        if (temOcorrencias) {
+            alert("Este colaborador possui ausências. Exclua as ausências primeiro.");
+            return;
+        }
+        if(confirm("Excluir colaborador?")) {
+            colaboradores = colaboradores.filter(c => c.id !== id);
+            salvarDados();
+            renderizarTudo();
+        }
+    }
+
+    function contagemPorColaborador() {
+        const contagem = {};
+        colaboradores.forEach(c => contagem[c.id] = 0);
+        ocorrencias.forEach(occ => {
+            if (contagem[occ.colaboradorId] !== undefined) contagem[occ.colaboradorId]++;
+        });
+        return contagem;
+    }
+
+    function excluirOcorrenciaDireta(id, event) {
+        event.stopPropagation();
+        if (confirm("Excluir esta ausência?")) {
+            excluirOcorrencia(id);
+        }
+    }
+
+    function abrirModalOcorrencia(occ = null, data = null, colabId = null) {
+        const modalDados = occ ? { ...occ } : { data, colaboradorId: colabId, motivo: "", id: null };
+        document.getElementById("modalTitulo").innerText = occ ? "Editar Ausência" : "Nova Ausência";
+        document.getElementById("modalCorpo").innerHTML = `
+            <div class="form-group">
+                <label>Data</label>
+                <input type="date" id="modalData" value="${modalDados.data || ''}" required>
+            </div>
+            <div class="form-group">
+                <label>Colaborador</label>
+                <select id="modalColaborador">
+                    ${colaboradores.map(c => `<option value="${c.id}" ${modalDados.colaboradorId === c.id ? 'selected' : ''}>${c.nome}</option>`).join('')}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Motivo</label>
+                <textarea id="modalMotivo" rows="3" placeholder="Informe o motivo da ausência">${modalDados.motivo || ''}</textarea>
+            </div>
+        `;
+        
+        const modalSalvar = document.getElementById("modalSalvar");
+        const modalCancelar = document.getElementById("modalCancelar");
+        
+        const salvarHandler = () => {
+            const data = document.getElementById("modalData").value;
+            const colaboradorId = parseInt(document.getElementById("modalColaborador").value);
+            const motivo = document.getElementById("modalMotivo").value;
+            if (!data || !colaboradorId) {
+                alert("Preencha todos os campos.");
+                return;
+            }
+            if (modalDados.id) {
+                editarOcorrencia(modalDados.id, data, colaboradorId, motivo);
+            } else {
+                adicionarOcorrencia(data, colaboradorId, motivo);
+            }
+            fecharModal();
+            modalSalvar.removeEventListener("click", salvarHandler);
+            modalCancelar.removeEventListener("click", cancelarHandler);
+        };
+        
+        const cancelarHandler = () => {
+            fecharModal();
+            modalSalvar.removeEventListener("click", salvarHandler);
+            modalCancelar.removeEventListener("click", cancelarHandler);
+        };
+        
+        modalSalvar.addEventListener("click", salvarHandler);
+        modalCancelar.addEventListener("click", cancelarHandler);
+        
+        document.getElementById("modal").style.display = "flex";
+    }
+
+    function abrirModalColaborador(colab = null) {
+        const modalDados = colab ? { ...colab } : { id: null, nome: "" };
+        document.getElementById("modalTitulo").innerText = colab ? "Editar Colaborador" : "Novo Colaborador";
+        document.getElementById("modalCorpo").innerHTML = `
+            <div class="form-group">
+                <label>Nome</label>
+                <input type="text" id="modalNome" value="${modalDados.nome || ''}" placeholder="Nome do colaborador" required>
+            </div>
+        `;
+        
+        const modalSalvar = document.getElementById("modalSalvar");
+        const modalCancelar = document.getElementById("modalCancelar");
+        
+        const salvarHandler = () => {
+            const nome = document.getElementById("modalNome").value.trim();
+            if (!nome) {
+                alert("Informe o nome.");
+                return;
+            }
+            if (modalDados.id) {
+                editarColaborador(modalDados.id, nome);
+            } else {
+                adicionarColaborador(nome);
+            }
+            fecharModal();
+            modalSalvar.removeEventListener("click", salvarHandler);
+            modalCancelar.removeEventListener("click", cancelarHandler);
+        };
+        
+        const cancelarHandler = () => {
+            fecharModal();
+            modalSalvar.removeEventListener("click", salvarHandler);
+            modalCancelar.removeEventListener("click", cancelarHandler);
+        };
+        
+        modalSalvar.addEventListener("click", salvarHandler);
+        modalCancelar.addEventListener("click", cancelarHandler);
+        
+        document.getElementById("modal").style.display = "flex";
+    }
+
+    function fecharModal() {
+        document.getElementById("modal").style.display = "none";
+    }
+
+    function renderizarAgenda() {
+        const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+        const container = document.getElementById("agendaMensal");
+        container.innerHTML = "";
+
+        for (let mes = 0; mes < 12; mes++) {
+            const diasNoMes = getDiasNoMes(anoAtual, mes);
+            const primeiroDia = getPrimeiroDiaSemana(anoAtual, mes);
+            const card = document.createElement("div");
+            card.className = "card-mes";
+
+            const titulo = document.createElement("div");
+            titulo.className = "mes-titulo";
+            titulo.innerText = `${meses[mes]} / ${anoAtual}`;
+            card.appendChild(titulo);
+
+            const diasGrid = document.createElement("div");
+            diasGrid.className = "dias-grid";
+
+            const diasSemana = ["D", "S", "T", "Q", "Q", "S", "S"];
+            diasSemana.forEach(dia => {
+                const cab = document.createElement("div");
+                cab.style.fontWeight = "600";
+                cab.style.textAlign = "center";
+                cab.style.padding = "8px 2px";
+                cab.style.fontSize = "11px";
+                cab.style.background = "#f5f5f5";
+                cab.innerText = dia;
+                diasGrid.appendChild(cab);
+            });
+
+            for (let i = 0; i < primeiroDia; i++) {
+                const vazio = document.createElement("div");
+                vazio.style.background = "#fafafa";
+                diasGrid.appendChild(vazio);
+            }
+
+            for (let dia = 1; dia <= diasNoMes; dia++) {
+                const celula = document.createElement("div");
+                celula.className = "dia-celula";
+                const numDiv = document.createElement("div");
+                numDiv.className = "numero-dia";
+                numDiv.innerText = dia;
+                celula.appendChild(numDiv);
+
+                const ocorrDia = obterOcorrenciasDoDia(anoAtual, mes, dia);
+                ocorrDia.forEach(occ => {
+                    const occDiv = document.createElement("div");
+                    occDiv.className = `ocorrencia ${obterCorColaborador(occ.colaboradorId)}`;
+                    
+                    const textoSpan = document.createElement("span");
+                    textoSpan.className = "ocorrencia-texto";
+                    textoSpan.innerText = obterNomeColaborador(occ.colaboradorId);
+                    textoSpan.title = `Motivo: ${occ.motivo}`;
+                    
+                    const btnRemover = document.createElement("button");
+                    btnRemover.className = "btn-remover-ocorrencia";
+                    btnRemover.innerText = "X";
+                    btnRemover.title = "Excluir ausência";
+                    btnRemover.onclick = (e) => excluirOcorrenciaDireta(occ.id, e);
+                    
+                    occDiv.appendChild(textoSpan);
+                    occDiv.appendChild(btnRemover);
+                    
+                    occDiv.onclick = (e) => {
+                        e.stopPropagation();
+                        abrirModalOcorrencia(occ);
+                    };
+                    
+                    celula.appendChild(occDiv);
+                });
+
+                celula.onclick = () => abrirModalOcorrencia(null, `${anoAtual}-${String(mes+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`, null);
+                diasGrid.appendChild(celula);
+            }
+            card.appendChild(diasGrid);
+            container.appendChild(card);
+        }
+    }
+
+    function renderizarColaboradores() {
+        const container = document.getElementById("listaColaboradores");
+        container.innerHTML = "";
+        colaboradores.forEach(colab => {
+            const div = document.createElement("div");
+            div.className = "lista-item";
+            div.innerHTML = `
+                <div style="display: flex; align-items: center;">
+                    <div class="quadrado-cor" style="background: ${getCorHex(colab.cor)};"></div>
+                    <span>${colab.nome}</span>
+                </div>
+                <div>
+                    <button class="secundario" onclick="editarColab(${colab.id})" style="margin-right: 5px;">Editar</button>
+                    <button class="perigo" onclick="excluirColab(${colab.id})">Excluir</button>
+                </div>
+            `;
+            container.appendChild(div);
+        });
+    }
+
+    function getCorHex(classe) {
+        const cores = {
+            'colab-rosa': '#e83e8c',
+            'colab-verde': '#5cb85c',
+            'colab-laranja': '#f0ad4e',
+            'colab-roxo': '#aa66cc',
+            'colab-vermelho': '#d9534f',
+            'colab-azul': '#4a90c4',
+            'colab-cinza': '#6c757d',
+            'colab-marrom': '#8b5a2b',
+            'colab-azul-claro': '#5bc0de'
+        };
+        return cores[classe] || '#999';
+    }
+
+    function renderizarResumo() {
+        const container = document.getElementById("resumoContagens");
+        const contagem = contagemPorColaborador();
+        container.innerHTML = "";
+        colaboradores.forEach(colab => {
+            const div = document.createElement("div");
+            div.className = "lista-item";
+            const qtd = contagem[colab.id] || 0;
+            div.innerHTML = `
+                <span>${colab.nome}</span>
+                <span class="contador">${qtd} ${qtd === 1 ? 'solicitação' : 'solicitações'}</span>
+            `;
+            container.appendChild(div);
+        });
+    }
+
+    window.editarColab = (id) => {
+        const colab = colaboradores.find(c => c.id === id);
+        if (colab) abrirModalColaborador(colab);
+    };
+
+    window.excluirColab = (id) => {
+        if (confirm("Excluir colaborador?")) excluirColaborador(id);
+    };
+
+    function atualizarAno() {
+        anoAtual = parseInt(document.getElementById("selecionarAno").value);
+        renderizarAgenda();
+    }
+
+    function renderizarTudo() {
+        renderizarAgenda();
+        renderizarColaboradores();
+        renderizarResumo();
+    }
+
+    document.getElementById("selecionarAno").addEventListener("change", atualizarAno);
+    document.getElementById("novoColaboradorBtn").addEventListener("click", () => {
+        abrirModalColaborador(null);
+    });
+
+    window.addEventListener("click", (e) => {
+        if (e.target === document.getElementById("modal")) fecharModal();
+    });
+
+    carregarDados();
+    renderizarTudo();
+
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js').then(reg => {
+            console.log('Service Worker registrado');
+        }).catch(err => {
+            console.log('Falha ao registrar Service Worker');
+        });
+    }
+</script>
+</body>
+</html>
